@@ -11,9 +11,9 @@ classes:
 
   _header : |
       Reactorg
-      @author: Phil Estival @ cartodebat.com
-      cartdebat © 2017
-      Date:<>
+      @author: you
+      @licence : GPL
+      Date:<2017/12/01 23:59:33>
       generated with Genclass alpha
 
       {name}
