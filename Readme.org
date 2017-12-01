@@ -1,0 +1,4 @@
+
+* Genclass code generator
+
+A generic code generator based on tables, types and relationships

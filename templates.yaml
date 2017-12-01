@@ -1,0 +1,448 @@
+
+# Genclass templates
+
+# use the following regexp to detect isolated "{" and "}" that should be doubled
+# [^{]{[^{]
+# [^}]}[^}]
+
+types: [int,float,string,list] # and later we'll meet tuple,color,method
+
+classes:
+
+  _header : |
+      Reactorg
+      @author: Phil Estival @ cartodebat.com
+      cartdebat © 2017
+      Date:<>
+      generated with Genclass alpha
+
+      {name}
+
+
+  Yaml: # no template needed
+
+
+  PythonStatic :
+    class : |
+        '''{header}'''
+        class {name}({Meta}) :
+            def __init__(_):
+    member : "    _.{member} = {value} "
+
+
+  Monguo:
+    file: "{0}/{0}DB.py"
+    imports: |
+        from monguo import Document
+        from monguo.field import (
+            IntegerField as IntField,
+            DateTimeField,
+            ReferenceField, StringField, StringField as EmailField,
+            ListField, ObjectIdField, BooleanField, BinaryField,
+            ObjectIdField as OidField, EmbeddedDocumentField
+        )
+        from torg.db.fields import *
+        from torg.db.image import ImageDocument
+        from torg.db.generics import MakeCategory_with_avatar
+
+    document: |
+      class {name}(Document):
+          meta = {{ 'collection': '{name}' }}
+
+    field: "{name} = {field}({options})"
+
+    makeCategory: "{0}Category, {0}Avatar = MakeCategory_with_avatar({0})"
+
+
+
+  WtForm :
+    file: "{0}/{0}Form.py"
+    imports: |
+      from wtforms_tornado import Form
+      from wtforms.fields import *
+      from wtforms.fields import IntegerField as IntField, FieldList as ListField
+      from wtforms.validators import InputRequired, Regexp, Length, Optional, AnyOf
+      from torg.form import *
+
+    class : |
+      class {name}(Form) :
+    member : "    {member} = {field}({validators})"
+
+
+  TorgHandler :
+    file: "{0}/{0}_h.py"
+    imports : |
+      from tornado.web import HTTPError
+      from torg.jwtauth import jwtauth as authenticated, level
+      from bson.objectid import ObjectId
+      from monguo.util import DB_Ref
+      from datetime import datetime
+      from torg.handlers.docbase_h import DocumentBase_H as _H
+      from torg.authorizations import AUTH_LEVEL
+      from torg.api.{name}.{Name}DB import {Name}
+      from torg.api.{name}.{Name}Form import *
+      import torg.debuglog
+      log = torg.debuglog.get(__name__)
+    import_cat : |
+      from torg.api.{name}.{Name}DB import {Name}Category as Category
+
+    urlpattern: "(r'/api/{name}/{crud}', {Name}{Crud}_H),"
+
+    member: "'{name}' : form.{name}"
+
+    Read : |
+      class {name}Read_H(_H) :
+          @authenticated
+          @level(AUTH_LEVEL['{name}']['read'])
+          async def get(_,id):
+              doc = yield {name}.get(id,{{}})
+              if not doc:
+                  raise HTTPError(404)
+              _.json(doc)
+
+          '''
+          {docmembers}
+          '''
+
+    Create: |
+      class {name}Create_H(_H) :
+          @authenticated
+          @level(AUTH_LEVEL['{name}']['create'])
+          async def post(_):
+              form = _.form({name}CreateForm)
+              _.get_current_user()
+              uidref = _.getUidRef()
+              doc = {{
+      {docmembers}
+              }}
+              _id = yield {name}.insert_one(doc)
+
+              if not _id : raise HTTPError(500)
+              else:
+                  d = yield {name}.find_one(_id)
+                  # embed ref here
+
+                  _.json(_.to_str_field(d))
+
+    Update: |
+        class {name}Update_H(_H):
+            @authenticated
+            @level(AUTH_LEVEL['{name}']['update'])
+            async def post(_):
+                form = _.form({name}UpdateForm)
+                _id = ObjectId(form.did)
+                doc = yield {name}.find_one(_id)
+                if not doc : raise HTTPError(404)
+
+                # if doc['uid'].id != user['_id']: raise HTTPError(401)
+                # owning authorizations goes here
+
+                updoc = {{
+        {docmembers}
+                }}
+                updoc.update({{'last_update': datetime.now()}})
+
+                if form.categories :
+                    cats = list(set([ObjectId(x) for x in form.categories]))
+                    cursor = Category.find(
+                        {{'_id':{{'$in':cats}}}},
+                        {{'_id':1}}
+                    )
+                    list_ = yield Category.to_list(cursor)
+                    cats = [ DB_Ref(Category,cat['_id']) for cat in list_ ]
+                    updoc.update({{"categories":cats}})
+
+
+                res = yield Debat.update(
+                    {{'_id': did}},
+                    {{'$set': updoc}}
+                )
+
+                if(res and res['ok']) :
+                    self.json({{5:5}})
+                else :
+                    raise HTTPError(500, 'Erreur à la sauvegarde du document ')
+                #
+
+    Delete: |
+        class {name}Delete_H(_H):
+            @authenticated
+            @level(AUTH_LEVEL['{name}']['delete'])
+            async def post(_):
+                form = _.form(OidListForm)
+                await {name}.archive_list(form.oids)
+                _.json({{0:len(form.oids)}})
+            '''{docmembers}'''
+    List: |
+        class {name}List_H(_H):
+            @authenticated
+            @level(AUTH_LEVEL['{name}']['list'])
+            async def get(_):
+                form = _.form({name}ListForm)
+                _list = await {name}.get_list(form.page,form.pagesize)
+                # process specifics and embed here
+                L = {{_.str_field(_list)}} if _list else None
+
+                _.json(L)
+            '''{docmembers}'''
+
+    FullList: |
+        class {name}FullList_H(_H):
+            @authenticated
+            @level(AUTH_LEVEL['{name}']['full_list'])
+            async def get(_):
+                _list = await {name}.get_list()
+                # process specifics and embed here
+                L = {{_.str_field(_list)}} if _list else None
+
+                _.json(L)
+            '''{docmembers}'''
+
+
+
+  reactComponent:
+    file: "{0}/{0}.jsx"
+    imports: | # unparametrized
+      import FormControl  from 'abstract/FormControl'
+      import {http} from 'lib/xhr'
+      import {Container,Button, Form} from 'UI'
+      import {TextField} from 'UI/TextField'
+
+    input: |
+      <TextField label="{name}"
+                 value={{ {name} }}
+                 onChange={{e => {{this.fill(e, '{name}') }}}}
+                 validator={{ {type}Validator }}
+                 />
+
+    class: | # requires name, membersdict, memberStateDict, memberslist, inputs
+        export default class {name} extends FormControl {{
+          resetstate() {{
+            super.initialStates({{
+              {membersdict}
+            }})
+          }}
+
+          constructor() {{
+              super(...arguments);
+              this.resetstate();
+              this.fetch()
+          }}
+          componentDidMount() {{}}
+
+          fetch() {{
+              http.get("/api/{name}", true)
+              .then(dat => {{this.setState(dat)}})
+              .catch(er=>{{console.error("error", er)}})
+          }}
+
+          validated() {{  /* and after validation... */ }}
+
+          error() {{}}
+
+          submit(e) {{
+              super.submit(
+                ()=>http.post
+                (
+                    '/api/{name}',
+                    {{{memberStateDict}}},
+                    false
+                )
+              )
+          }}
+
+          render({{}}, {{{memberslist}, error, formChanged}}, {{}}) {{
+            return <Container>
+              {inputs}
+              {{
+                  error && !formChanged &&
+                  <div className="danger">
+                    <strong>Erreur :</strong> {{error}}
+                  </div>
+              }}
+
+              <Button primary
+                onClick={{e=>this.submit(e)}}
+                disabled = {{
+                  !({andmembers}
+                  && !processing )
+                }}
+              >OK</Button>
+              <Button secondary onClick={{(e) => this.onClose()}}>Annuler</Button>
+
+            </Container>
+          }}
+        }}
+
+  reactList:
+    file: "{0}/List{0}.jsx"
+    imports: | # unparametrized
+      import List from 'abstract/List'
+      import {Link} from 'preact-router';
+      import {Button, Checkbox, Table, Icon} from 'UI';
+      import {range} from 'lib/lang'
+
+    th: <th>{0}</th>
+    td: <td>{{item.{0}}}</td>
+
+    class: | # requires names, tablehead_properties
+
+      export default class {Name} extends List {{
+
+        itembypages = [10, 20, 50, 100];
+
+        constructor() {{
+            super(...arguments);
+
+            this.setState({{
+                page: 1,
+                pageSize: 10,
+                itemsbypages: 10
+            }})
+
+            this.src={name};
+            this.fetchItems(this.src);
+        }}
+
+
+        render({{src}}, {{selected, page, pageSize, i}}, {{}}) {{
+            let items = this.state.items;
+            let Nitems = 0, total_page = 1;
+            if (items) {{
+              Nitems = items.length
+              total_page = Math.ceil((Nitems - 1) / pageSize);
+            }}
+
+            return <Segment compact color='blue'>
+              <Form>
+                  <h3>{Name} ({{Nitems}})</h3>
+
+                  <Table collapsing compact sortable>
+                      <thead>
+                      <tr>
+                          <th><Checkbox class="smallCB"
+                                        checked={{this.state.checkAll}}
+                                        onChange={{e => this.checkAllItem()}}/></th>
+
+                          {th}
+
+                      </tr>
+                      </thead>
+                      <tbody>
+                      {{
+                          range((page - 1) * pageSize, Math.min(items.length, page * pageSize)).map(i=>{{
+                              let item = items[i];
+                              return <Table.Row>
+                                  <td><Checkbox checked={{item.selected}} class="smallCB"
+                                                onChange={{e=>{{ this.checkItem(i)}}}}/></td>
+                                  {td}
+
+                              </Table.Row>
+                          }})
+                      }}
+                      </tbody>
+                  </Table>
+
+                  <Button icon="trash"
+                        style="position:absolute"
+                        label="Supprimer" primary
+                        disabled={{!(selected && selected.length) }}
+                        onClick={{ ()=>{{this.deleteItems(selected)}}}}/>
+
+                {{total_page > 1 &&
+                <div>
+                    <Button icon="step backward"
+                            primary
+                            disabled={{page<2}}
+                            onClick={{() => {{
+                                this.setState({{page: page - 1}});
+                                this.fetchItems(this.src)}}
+                            }}
+                    />
+                    Page&nbsp;<input type="text" value={{page}} size="2"/>
+                      &nbsp; sur {{total_page}}&nbsp;
+                    <Button icon="step forward"
+                            primary
+                            disabled={{page >= total_page}}
+                            onClick={{() => {{
+                                        this.setState({{page: page + 1}});
+                                        this.fetchItems(this.src)
+                                    }}}}
+                    />
+                    <select onChange={{e => {{this.setState({{pageSize: this.itembypages[e.target.value]}})}}}}>
+                        {{ this.itembypages.map((e, i) => {{
+                            return <option value={{i}}>{{e}} lignes</option>
+                        }})}}
+                    </select>
+                    &nbsp;
+                </div>
+              </Form>
+
+            );
+         }}
+      }}
+
+
+
+Memo :
+  Object:
+    Test:
+      - i: 1
+      - x: 1.001
+      - s: ha!?
+      - L: [0,2,"3"]
+      - T: [0,1,2]
+      - c: #FFF
+      - none: #silenced
+      - none2:
+      - c: 0xFFF
+      - m: ...
+
+  Classes:
+    Test:
+      - i: int
+      - x: float
+      - s: str
+      - L: list
+      - T: tuple
+      - c: color
+      - m: method
+
+    Test2:
+      description : |
+        a multiline
+        description
+
+    Test3:
+      methods :
+       - m1: method1
+       - m2: methodman
+
+    Test4:
+      methods :
+       - m1:
+          method:
+            - x: int
+            - y: int
+
+
+
+
+  D: &personne1
+    n: name
+
+  # unused but could prove to be usefull
+  &anchor s:
+    test: name
+
+
+
+  foo:
+    foo: bar
+    d: *personne1
+    tag: [question, réponse]
+    *anchor: duplicate key
+
+    baz: bat
+    *anchor: duplicate key
+
