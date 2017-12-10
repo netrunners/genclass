@@ -741,7 +741,7 @@ if __name__ == '__main__':
 
     m = MainWindow()
     m.show()
-    m.load('genclass.yml')
+    #m.load('genclass.yml')
 
     '''
     D = DictTable({'A':1})
