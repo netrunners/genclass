@@ -21,7 +21,7 @@ class Generators:
         return _.__class__.__dict__
 
     def _availables(_) :
-        L = [ x for x in _._classdict() if x[0] is not '_' ]
+        L = [ x for x in _._classdict() if x[0] != '_' ]
         L.sort(reverse=False)
         implemented = L
         '''
