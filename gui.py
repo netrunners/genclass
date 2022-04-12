@@ -18,15 +18,14 @@ def GUI(qApp,window):
         ],
         'actions': OrderedDict([
             # key       statusText      shortcut,   icon    func    checkable
-            ('Open'     ,['Open file','Ctrl+o'      , None, window.open     ]),
-            ('Save'     ,['Save file','Ctrl+s'      , None, window.save     ]),
-            ('Save As'  ,['Save file','Ctrl+shift+s', None, window.saveAs   ]),
-            ('Exit'     ,['get out'  ,'Ctrl+q'      , None, window.close    ]),
-            ('New Class',['new class table', ''     , None, window.newclass ]),
-            ('New Dict' ,['new dict table' , ''     , None, window.newdict  ]),
-            ('Bind Generators' ,['bind them', ''    , None, window.bindGenerators, True]),
-            ('Generate all' ,['genereate', ''   , None, window.generateAll ]),
-
+            ('Open'            ,['Open file'      ,'Ctrl+o'      , None, window.open     ]),
+            ('Save'            ,['Save file'      ,'Ctrl+s'      , None, window.save     ]),
+            ('Save As'         ,['Save file'      ,'Ctrl+shift+s', None, window.saveAs   ]),
+            ('Exit'            ,['get out'        ,'Ctrl+q'      , None, window.close    ]),
+            ('New Class'       ,['new class table', ''           , None, window.newclass ]),
+            ('New Dict'        ,['new dict table' , ''           , None, window.newdict  ]),
+            ('Bind Generators' ,['bind them'      , ''           , None, window.bindGenerators,True]),
+            ('Generate all'    ,['generate'       , ''           , None, window.generateAll ]),
         ]),
     }
 
